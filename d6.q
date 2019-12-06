@@ -1,53 +1,40 @@
-input:read0 `:d6test.q
-input:read0 `:d619.txt
+input:read0 `:d6.txt
 
-count input 
-
-data:input
-
-.d6.p1:{[data]
-	map:`$/: ")" vs/: data;
-	final:map[;1] where not i:map[;1] in map[;0];
-	start:map[;0] where not i;
-	path:final,'start;
-
-	while[not all `COM=ends:last each path;
-	    
-	    0N!count ends;
-
-	 	ends:ends nonCOM:where not `COM=ends;
-		
-		i:{[map;x] first where map[;1]=x}[map;] each ends;
-
-		nextstep:map[;0] i;
-
-		path[nonCOM]:path[nonCOM],'nextstep;
-
+.d6.p1:{[]
+	map:`$/: ")" vs/: input;
+	d:(`u#map[;1])!map[;0];
+	s:key[d] where not i:key[d] in value d;
+	s:s,'ends:d[s];
+	while[not all `=ends:d[ends];
+	 	s:s,'ends
 		];
-	 
-	
-	n:1+/:til each count each orbs:reverse each path;
-	//sum -1+/:count each 
-	1_distinct raze n(#\:)'orbs
 
+ 	s:s except\: `;
+	n:neg 1+/:til each count each s;
+	
+	count each s
+
+	sum -1+/:count each 1_distinct raze n(#\:)'s
  }
 
-paths:.d6.p1 input
-\c 1000 1000
+.d6.p2:{[]
+	map:`$/: ")" vs/: input;
+	d:(`u#map[;1])!map[;0];
+	s:key[d] where not i:key[d] in value d;
+	s:s,'ends:d[s];
+	while[not all `=ends:d[ends];
+	 	s:s,'ends
+		];
+		
+	s:s except\: `;
+	n:neg 1+/:til each count each s;
+	
+	f:{[s;x] s first where x=first each s};
+	you:f[s;`YOU];
+	san:f[s;`SAN];
 
-l:first paths where `YOU=last each paths
+	-2+sum raze where each (you;san)=/:first (you inter san)
+ };
 
-s:first paths where `SAN=last each paths
-
-last l inter s
-
-(count[l]-2)-first where l=`VZX
-(count[s]-2)-first where s=`VZX
-
-244+216
-
-
-count l
-count s
 
 
