@@ -17,5 +17,5 @@ countN:{[x;y] (sum/) y=x};
 .d8.p2:{[x;y]
  / x is the larger number 
  p:(x*y) cut input;
- flip flip x cut k@'first each where each not "2"=k:flip p
+ ssr[;"1";"#"] each ssr[;"0";" "] each 25 cut k@'first each where each not "2"=k:flip p
  }
