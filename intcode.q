@@ -1,205 +1,216 @@
-\c 1000 1000
+/ split a single instruction into opcode and parameter modes
+parseInstr:{[instruction]
+	
+	opcode:"I"$-2#op:"0000",string instruction; 
+	paramModes:reverse "I"$/:-3#-2_op; 
 
-// operations dictionary to map 1 -> add and 2-> multiply
-opDict:1 2 3 4 5 6 7 8!(+;*;{readInput[]};{setOutput x};<>;=;<;=);
-
-/ parse the input array
-parseData:{[inp]
-	value each "," vs inp
+	(opcode;paramModes)
 	}
 
-setOutput:{0N!x;.kc.o:x};
+/ memory: 		array of memory for our program
+/ memAddr:		address we're currently reading
+/ paramMode:	mode of the current memory address
+getAddr:{[memory;memAddr;paramMode]
 
-/ system params
-.state.halt:0b;
-relativeBase:0;
+	.log.debug["Parameter addr and mode";(memAddr;paramMode)];
 
-/ get your opcode and the modes for params
-parseOpAndModes:{
-	/ parse a halt
-	op:"I"$-2#o:"0000",string x;
-	
-	if[99~op;
-		-1 "halt";
-        :enlist x
+	paramAddr:$[0=paramMode;
+				memory[memAddr]; / in position mode, the value in our current address is the param address
+			   1=paramMode;
+			   	memAddr; / in immediate mode, our current address is our param address
+			   2=paramMode;
+			    memory[memAddr]+.comp.relBase; / in relative mode, we apply our relative base to our value and then the value in that address is our param address
+			   'modeError
+			 ];	
+
+	.log.debug["Parameter value address";paramAddr];
+
+	paramAddr
+
+	}
+
+/ read location readAddr from memory (zero fill null)
+readFromAddr:{[memory;readAddr]
+	/ if you retrieve a null because there's no memory, replace with zero
+	0^memory[readAddr]
+	}
+
+/ write val to location writeAddr in memory
+writeToAddr:{[memory;writeAddr;val]
+	memory[writeAddr]:val;
+	memory
+	}
+
+/ memory: 		array of memory for our program
+/ writeAddr:	address we're currently reading
+/ uses writeAddr since we only need to pad on write, reads zero fill nulls
+padMemory:{[memory;writeAddr]
+	memSize:count memory;
+	if[writeAddr<0;
+		'NegativeMemAddr
 		];
 
-	if[any 1 2 7 8=op;
-		// modes
-		modes:reverse "I"$/:-3#-2_o;
-		]
+	/ if current memory size is smaller than the address we want to read, pad with zeros
+	if[memSize<=writeAddr;
+		:memory,(1+writeAddr-memSize)#0
+		];
+	
+	memory
+	}
 
-	if[any 3 4 9=op;
-		modes:"I"$-1#-2_o;
+/ Apply the instruction at instrAddr in memory
+/ memory
+/ instrPointer
+applyInstr:{[memory;instrAddr;opcode;paramModes]
+	
+	$[opcode=1;
+		[memory:add[memory;instrAddr;paramModes]; instrAddr+:4];
+	opcode=2;
+		[memory:mult[memory;instrAddr;paramModes]; instrAddr+:4];
+	opcode=3;
+		[memory:read[memory;instrAddr;paramModes]; instrAddr+:2];
+	opcode=4;
+		[output[memory;instrAddr;paramModes]; instrAddr+:2];
+	opcode=5;
+		[instrAddr:jumpNonZero[memory;instrAddr;paramModes]];
+	opcode=6;
+		[instrAddr:jumpZero[memory;instrAddr;paramModes]];
+	opcode=7;
+		[memory:boolLessThan[memory;instrAddr;paramModes]; instrAddr+:4];
+	opcode=8;
+		[memory:boolEquals[memory;instrAddr;paramModes]; instrAddr+:4];
+	opcode=9;
+		[updateRelativeBase[memory;instrAddr;paramModes]; instrAddr+:2];
+	opcode=99;
+		'halt;
+	/else
+		'InvalidOpcode
 	];
 
-	if[any 5 6=op;
-		// modes
-		modes:reverse "I"$/:-2#-2_o;
-		];
-
-	if[not all modes<3; 'modeError];
-
-	(op;modes)
+	(memory;instrAddr)
 
 	}
+
+/ OPERATION HELPER FUNCTIONS
+
+/ Apply func to two values and returns single output
+/ Modifies memory and returns the modified memory
+applyBinaryFuncAndWrite:{[memory;instrAddr;paramModes;func]
+	paramAddrs:1+n:til 3;
+	paramValAddrs:getAddr[memory;;] ./: (instrAddr+paramAddrs),'paramModes n;
+	
+	rAddrs:paramValAddrs[0 1];
+	wAddr:paramValAddrs 2;
+	memory:padMemory[memory;wAddr];
+	
+	/ read from rAddres, apply and write to wAddr
+	res:func . readFromAddr[memory;] rAddrs;
+	writeToAddr[memory;wAddr;res]
+	}
+
+/ Compare with zero and modify our instruction address
+/ This doesn't modify memory it just modifies our instrAddr
+applyComparisonWithZero:{[memory;instrAddr;paramModes;func]
+	paramAddrs:1+n:til 2;
+	paramValAddrs:getAddr[memory;;] ./: (instrAddr+paramAddrs),'paramModes n;
+
+	/ if the comparision is true, set to next parameter as the new instr addr
+	newInstrAddr:$[func . (0;readFromAddr[memory;paramValAddrs 0]);
+					readFromAddr[memory;paramValAddrs 1];
+					instrAddr+3
+				];
+
+	newInstrAddr
+	}
+
+readWithFuncAndWrite:{[memory;instrAddr;paramModes;func]
+	/ read
+	res:func (::);
+
+	/ store
+	wAddr:getAddr[memory;instrAddr+1;paramModes 0];
+	memory:padMemory[memory;wAddr];
+	writeToAddr[memory;wAddr;res]
+	}
+
+outputWithFunc:{[memory;instrAddr;paramModes;func]
+	rAddr:getAddr[memory;instrAddr+1;paramModes 0];
+	
+	func readFromAddr[memory;rAddr]
+
+	}
+
+updateRelativeBase:{[memory;instrAddr;paramModes]
+	rAddr:getAddr[memory;instrAddr+1;paramModes 0];
+	
+	.comp.relBase:.comp.relBase+readFromAddr[memory;rAddr]
+ 	}
+
+/ OPERATION DEFINITIONS
+
+add:applyBinaryFuncAndWrite[;;;+];
+mult:applyBinaryFuncAndWrite[;;;*];
+read:readWithFuncAndWrite[;;;readInput];
+output:outputWithFunc[;;;setOutput]
+jumpNonZero:applyComparisonWithZero[;;;<>];
+jumpZero:applyComparisonWithZero[;;;=];
+boolLessThan:applyBinaryFuncAndWrite[;;;{`long$x<y}];
+boolEquals:applyBinaryFuncAndWrite[;;;{`long$x=y}];
+
+parseProgram:{[strInput]
+	"J"$/:"," vs strInput
+	}
+
+run:{[strProgram]
+
+	/ set up memory and parse the first instruction
+	memory:parseProgram strProgram;
+	
+	instrAddr:0;
+	instrCounter:0;
+	.comp.relBase:0; 
+	p:parseInstr memory[instrAddr];
+	opcode:first p;
+	paramModes:last p;
+
+	/or (.debug.haltAfter>instrCounter)
+	while[99<>opcode;
+
+		.log.debug["-----------";instrCounter];
+		.log.debug["(InstrAddress;opcode;ParamModes;RelBase)"; (instrAddr;opcode;paramModes;.comp.relBase)];
+		.log.debug["memory"; memory];
+		
+		results:applyInstr[memory;instrAddr;opcode;paramModes];	
+		/ results are the new memory and instruction address
+		memory:results[0];
+		instrAddr:results[1];
+		
+		/ parse the next instruction 
+		p:parseInstr memory[instrAddr];
+		opcode:first p;
+		paramModes:last p;
+
+		instrCounter+:1;
+
+	];
+
+	}
+
 
 / simulate user input using a global
 readInput:{[]
-    0N!"Enter some input: ";
+    0N!"Enter some input:";
     "I"$read0 0 
     }
 
 setOutput:{[x]
-    0N!"Getting output";
-    .kc.o:x
+    0N!x;
     }
 
-/ get correct parameters based on mode 
-getD:{[l;i;mode]
+.log.setDebug:1b;
 
-	v:0^l[i];
-
-    / position mode 
-	if[mode=0;
-		:0^l v
-		];
-
-	/ immediate mode
-	if[mode=1;
-		:v
-		]
-
- 	/ relative mode - index with the offset
-	if[mode=2;
-		rel:relativeBase+l[i];
-		:0^l[rel]
-	 	]
-	}
-
-/ get corect parameters based on mode 
-access:{[l;i;mode]
-
-	v:l[i];
-
-    / position mode 
-	if[mode=0;
-		:v
-		];
-
- 	/ relative mode - index with the offset
-	if[mode=2;
-		:l[relativeBase+i];
-	 	]
-	}
-
-write:{[l;i;mode]
-	
-	if[mode=0;
-		:0^l[i]
-		];
-
-	if[mode=2;
-		:0^l[i]+relativeBase
-		];
-
- }
-
-/ loop over the the input list til we get a halt
-run:{[d]
-	i:0;
-	n:parseData d;
-	
-	while[99<>op:first om:parseOpAndModes n[i];
-		/0N!"ops modes";
-		/0N!om;
-		/ get modes in order
-		m:last om;
-		
-		list:main[n;op;m;i];
-
-		n:list[0];
-		step:list[1];
-		i:list[2];
-
-		i+:step;
-		];
-    
-	}
-
-/ extend end by posToHit zeros
-pad:{[n;posToHit]
-	if[count[n]<=posToHit;
-		:n,(1+posToHit - count[n])#0
-		];
-	n
- 	}
-
-/ perform single op and update list
-main:{[n;op;m;i]
-	
-	/0N!"Status:";
-	/0N!op;
-	/0N!m;
-	/0N!n;
-
-	// add or multipy
-	if[any 1 2 = op;
-		/ pad mem with zeros first
-		n:pad[n;write[n;i+3;m 2]];
-		n:@[n;write[n;i+3;m 2];:;opDict[op] . (getD[n;i+1;m 0];getD[n;i+2;m 1])];
-		step:4
-	 ];
-
-	// read input 
-	if[3 = op;
-		/ pad mem with zeros first
-		n:pad[n;write[n;i+1;m]];
-		
-		n:@[n;write[n;i+1;m];:;opDict[op] (::)];
-		step:2	
-	 ];
-
-	// output 
-	if[4 = op;
-		o:$[m=2;relativeBase+n i+1;m=0;n i+1;m=1;i+1;'outerr];
-		opDict[op] n o;
-		step:2
-	 ];
-
-	// jumps
-	// check non zero (5) or equal zero (6)
-	if[any 5 6= op;
-		step:3;
-		if[opDict[op] . (0;getD[n;i+1;m 0]);
-			i:getD[n;i+2;m 1];
-			/ pad if i jump to a far location
-			n:pad[n;i];
-			step:0
-			];
-	 ];
-
-
-	// args check
-	if[any 7 8=op;
-		n:pad[n;write[n;i+3;m 2]];
-
-		v:`long$opDict[op] . (getD[n;i+1;m 0];getD[n;i+2;m 1]);
-		/ if true put 1, if false put 0
-		n:@[n;write[n;i+3;m 2];:;v];
-		step:4
-	 ];
-
-	 / adjust the relativeBase
-	 if[9 = op;
-	 	/0N!"updating rel base: ",string i;
-	 	/if[(i=21)&m=2;'s];
-	 	`relativeBase set relativeBase+o:$[m=2;n relativeBase+n i+1;m=0;n n i+1;m=1;n i+1;'outerr];
-	 	/0N!relativeBase;
-	 	step:2
-	 ];
-
-	(n;step;i)
-    
-   }
-
+.log.debug:{[msg;obj]
+	if[.log.setDebug;
+		-1 msg," : ",-3!obj
+	];
+	};
