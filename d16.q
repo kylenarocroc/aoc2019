@@ -24,7 +24,7 @@ run:{[nphases]
  }
  
 big:{[input]
- `input set 10000#input;
+ `input set raze 10000#enlist input;
  offset:"I"$7#input;
  out:run[100];
  8#offset_out
