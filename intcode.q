@@ -150,8 +150,6 @@ updateRelativeBase:{[memory;instrAddr;paramModes]
 
 add:applyBinaryFuncAndWrite[;;;+];
 mult:applyBinaryFuncAndWrite[;;;*];
-read:readWithFuncAndWrite[;;;readInput];
-output:outputWithFunc[;;;setOutput]
 jumpNonZero:applyComparisonWithZero[;;;<>];
 jumpZero:applyComparisonWithZero[;;;=];
 boolLessThan:applyBinaryFuncAndWrite[;;;{`long$x<y}];
@@ -206,6 +204,9 @@ readInput:{[]
 setOutput:{[x]
     0N!x;
     }
+
+read:readWithFuncAndWrite[;;;readInput];
+outp1ut:outputWithFunc[;;;setOutput];
 
 .log.setDebug:1b;
 

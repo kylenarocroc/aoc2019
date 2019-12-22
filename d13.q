@@ -1,4 +1,4 @@
-\l intcode-v2.q
+\l intcode.q
 
 input:first read0`:d13.txt
 
@@ -13,28 +13,6 @@ inputlist:();
 .input.i:0;
 
 instr:"asd"!(-1;0;1);
-
-/ set customer read write functions 
-/readInput:{
-	/ first input came after x outputs
-
-
-	/ and redraw from there 
-	/ drop off the last 10 moves
-//	if[.input.i<=-10+count .save.inputs;
-//		.input.i+:1;
-//		:.save.inputs[.input.i-1]
-//	];
-
-/	0N!"Saving inp",string count .save.inputs;
-
-/	inp:instr first read0 0;
-/	.input.i+:1;
-/	.save.inputs,:inp;
-/	inp
-/	}
-
-
 
 readInput:{
 	
@@ -79,8 +57,8 @@ setOutput:{[x]
 	};
 
 
-read:readWithFuncAndWrite[;;;readInput];
-output:outputWithFunc[;;;setOutput]
+read:readWithFuncAndWrite[;;;get`readInput];
+output:outputWithFunc[;;;get`setOutput]
 
 drawScreen:{
 	/ drop of the outputs we had previous
@@ -114,8 +92,7 @@ drawScreen:{
 
 		i+:1;
 		];
-
-	/-1@/:graph;
+	-1@/:graph;
 
 	}
 
